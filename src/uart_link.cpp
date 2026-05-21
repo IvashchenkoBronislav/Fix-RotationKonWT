@@ -302,12 +302,15 @@ void uartRequestAngle() {
   printPacket("[TX2]", packet);
 }
 
-void uartSendGoto(int angle) {
+void uartSendGoto(int angle, uint8_t direction) {
   Packet packet = {};
   packet.type = PACKET_GOTO_AZIMUTH;
-  packet.length = 2;
+  packet.length = direction == 0 ? 2 : 3;
   packet.payload[0] = static_cast<uint8_t>(angle & 0xFF);
   packet.payload[1] = static_cast<uint8_t>((angle >> 8) & 0xFF);
+  if (packet.length >= 3) {
+    packet.payload[2] = direction;
+  }
 
   requestedGotoTarget = angle;
   gotoPending = false;

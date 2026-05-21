@@ -7,7 +7,9 @@ void uartLinkUpdate();
 
 void uartSendPing();
 void uartRequestAngle();
-void uartSendGoto(int angle);
+// Direction byte is optional and is understood by newer RotationKon firmware:
+// 1 = CW, 2 = CCW. Pass 0 to let the controller choose (backward compatible).
+void uartSendGoto(int angle, uint8_t direction = 0);
 void uartSendStop();
 void uartSendPeerIp(const char *ipText);
 

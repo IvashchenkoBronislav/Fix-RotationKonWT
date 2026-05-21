@@ -28,6 +28,13 @@ String pendingServerAckStatus;
 String pendingServerAckMessage;
 bool remoteErrorSnapshotReady = false;
 uint8_t lastReportedRemoteErrors = 0;
+int allowedFromDeg = 0;
+int allowedToDeg = 359;
+uint32_t lastAllowedFetchMs = 0;
+
+bool sendGetRequest(const String &path, String *responseOut = nullptr, int *statusOut = nullptr);
+int extractJsonInt(const String &json, const char *token, int fallbackValue);
+String extractJsonString(const String &json, const char *token);
 
 const char *remoteStateToString(uint8_t state) {
   switch (state) {
@@ -58,6 +65,36 @@ int angleDelta(int a, int b) {
   return diff;
 }
 
+bool isAngleAllowed(int angle) {
+  const int a = normalizeAngle(angle);
+  const int from = normalizeAngle(allowedFromDeg);
+  const int to = normalizeAngle(allowedToDeg);
+
+  if (from <= to) {
+    return a >= from && a <= to;
+  }
+
+  return a >= from || a <= to;
+}
+
+uint8_t chooseGotoDirection(int currentDeg, int targetDeg) {
+  const int current = normalizeAngle(currentDeg);
+  const int target = normalizeAngle(targetDeg);
+  const int from = normalizeAngle(allowedFromDeg);
+  const int to = normalizeAngle(allowedToDeg);
+  const int arcLen = (to - from + 360) % 360;
+  const int posCurrent = (current - from + 360) % 360;
+  const int posTarget = (target - from + 360) % 360;
+
+  // If we cannot map angles onto the allowed arc, fall back to controller choice.
+  if (posCurrent > arcLen || posTarget > arcLen) {
+    return 0;
+  }
+
+  // Travel strictly within allowed arc: CW means increasing along the arc, CCW means decreasing (wrap via 0/359).
+  return posTarget >= posCurrent ? 1 : 2;
+}
+
 bool pendingGotoReachedTarget() {
   if (pendingGotoTargetAngle < 0 || !uartHasRemoteStatus()) {
     return false;
@@ -75,6 +112,27 @@ String makeApiUrl(const String &path) {
   url += String(API_PORT);
   url += path;
   return url;
+}
+
+bool fetchAllowedSector() {
+  String response;
+  if (!sendGetRequest(String("/api/external/devices/") + DEVICE_ID + "/status", &response)) {
+    return false;
+  }
+
+  const int from = extractJsonInt(response, "\"allowedFromDeg\":", -1);
+  const int to = extractJsonInt(response, "\"allowedToDeg\":", -1);
+  if (from < 0 || to < 0) {
+    return false;
+  }
+
+  allowedFromDeg = normalizeAngle(from);
+  allowedToDeg = normalizeAngle(to);
+  Serial.print("[NET] allowed sector updated from=");
+  Serial.print(allowedFromDeg);
+  Serial.print(" to=");
+  Serial.println(allowedToDeg);
+  return true;
 }
 
 bool sendJsonRequest(const char *path, const String &payload, String *responseOut = nullptr, int *statusOut = nullptr) {
@@ -114,7 +172,7 @@ bool sendJsonRequest(const char *path, const String &payload, String *responseOu
   return httpCode >= 200 && httpCode < 300;
 }
 
-bool sendGetRequest(const String &path, String *responseOut = nullptr, int *statusOut = nullptr) {
+bool sendGetRequest(const String &path, String *responseOut, int *statusOut) {
   HTTPClient http;
 
   if (!http.begin(makeApiUrl(path))) {
@@ -221,7 +279,22 @@ bool fetchAndDispatchNextCommand() {
       return false;
     }
 
-    uartSendGoto(angle);
+    if (!isAngleAllowed(angle)) {
+      pendingCommandId = static_cast<uint32_t>(commandId);
+      pendingCommandType = commandType;
+      pendingServerAckReady = true;
+      pendingServerAckStatus = "FAILED";
+      pendingServerAckMessage = "Angle outside allowed sector";
+      Serial.print("[NET] rejected GOTO outside allowed sector angle=");
+      Serial.println(angle);
+      return true;
+    }
+
+    uint8_t direction = 0;
+    if (uartHasRemoteStatus()) {
+      direction = chooseGotoDirection(uartGetRemoteAngle(), angle);
+    }
+    uartSendGoto(angle, direction);
     pendingAckCode = PACKET_GOTO_AZIMUTH;
     pendingGotoTargetAngle = normalizeAngle(angle);
   } else if (commandType == "STOP") {
@@ -438,6 +511,9 @@ void networkApiInit() {
   pendingServerAckMessage = "";
   remoteErrorSnapshotReady = false;
   lastReportedRemoteErrors = 0;
+  allowedFromDeg = 0;
+  allowedToDeg = 359;
+  lastAllowedFetchMs = 0;
 }
 
 void networkApiUpdate() {
@@ -456,6 +532,11 @@ void networkApiUpdate() {
   }
 
   const uint32_t now = millis();
+
+  if ((now - lastAllowedFetchMs) >= 10000 || lastAllowedFetchMs == 0) {
+    lastAllowedFetchMs = now;
+    fetchAllowedSector();
+  }
 
   uint8_t ackCode = 0;
   if (uartConsumeAckCode(&ackCode) && pendingCommandId != 0) {

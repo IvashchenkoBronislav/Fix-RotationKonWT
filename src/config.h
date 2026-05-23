@@ -17,7 +17,8 @@ constexpr uint32_t UART_REMOTE_STATUS_REQUEST_MS = 1000;
 
 // Backend-facing device identity.
 // DEVICE_ID should be unique for each physical unit in the database.
-constexpr const char *DEVICE_ID = "r1p-005";
+constexpr const char *DEVICE_ID = "r1p-005 ";
+constexpr const char *VER = "0.1";
 constexpr const char *DEVICE_TYPE = "RotationKonWT";
 constexpr const char *DEVICE_DESCRIPTION = "WT32 remote controller";
 

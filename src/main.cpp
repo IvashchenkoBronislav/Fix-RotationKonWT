@@ -14,7 +14,9 @@ void setup() {
   Serial.println("WT32 UART2 test");
   Serial.println("Board: WT32-ETH01");
   Serial.print("DEVICE_ID: ");
-  Serial.println(DEVICE_ID);
+  Serial.print(DEVICE_ID);
+  Serial.print(" Version: ");
+  Serial.println(VER);
   Serial.print("Device Type: ");
   Serial.println(DEVICE_TYPE);
   Serial.print("Role: ");

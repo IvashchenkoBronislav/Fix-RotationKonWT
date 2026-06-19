@@ -5,11 +5,11 @@
 constexpr uint32_t DEBUG_BAUD = 115200;
 constexpr uint32_t UART2_BAUD = 9600;
 constexpr uint32_t NETWORK_RETRY_INTERVAL_MS = 10000;
-constexpr uint32_t API_REGISTER_RETRY_MS = 10000;
+constexpr uint32_t API_REGISTER_RETRY_MS = 500;
 constexpr uint32_t API_STATUS_IDLE_INTERVAL_MS = 2000;
 constexpr uint32_t API_STATUS_ACTIVE_INTERVAL_MS = 250;
 constexpr uint32_t API_COMMAND_POLL_INTERVAL_MS = 1000;
-constexpr uint32_t API_COMMAND_ACK_TIMEOUT_MS = 30000;
+constexpr uint32_t API_COMMAND_ACK_TIMEOUT_MS = 1000;
 constexpr uint32_t API_COMMAND_ACK_RETRY_MS = 1000;
 constexpr uint32_t API_HTTP_TIMEOUT_MS = 5000;
 constexpr uint32_t WEB_STATUS_REFRESH_MS = 2000;
@@ -17,7 +17,7 @@ constexpr uint32_t UART_REMOTE_STATUS_REQUEST_MS = 1000;
 
 // Backend-facing device identity.
 // DEVICE_ID should be unique for each physical unit in the database.
-constexpr const char *DEVICE_ID = "r1p-005 ";
+constexpr const char *DEVICE_ID = "r1p-004";
 constexpr const char *VER = "0.1";
 constexpr const char *DEVICE_TYPE = "RotationKonWT";
 constexpr const char *DEVICE_DESCRIPTION = "WT32 remote controller";

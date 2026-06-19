@@ -354,6 +354,39 @@ bool sendCommandAck(const char *status, const String &message) {
   return ok;
 }
 
+void checkForPreemptingStop() {
+  String response;
+  if (!sendGetRequest(String(API_COMMAND_NEXT_PATH) + "?deviceId=" + DEVICE_ID + "&type=STOP", &response)) {
+    return;
+  }
+
+  if (response.indexOf("\"hasCommand\":true") < 0) {
+    return;
+  }
+
+  const int commandId = extractJsonInt(response, "\"id\":", 0);
+  if (commandId <= 0) {
+    return;
+  }
+
+  Serial.print("[NET] STOP preempts GOTO id=");
+  Serial.println(pendingCommandId);
+
+  uartSendStop();
+  sendCommandAck("FAILED", "Preempted by STOP");
+
+  pendingCommandId = static_cast<uint32_t>(commandId);
+  pendingCommandSentAtMs = millis();
+  lastPendingAckPostMs = 0;
+  pendingAckCode = PACKET_STOP;
+  pendingCommandType = "STOP";
+  pendingGotoTargetAngle = -1;
+  pendingControllerAckReceived = false;
+  pendingServerAckReady = false;
+  pendingServerAckStatus = "";
+  pendingServerAckMessage = "";
+}
+
 bool flushPendingServerAck(uint32_t now) {
   if (!pendingServerAckReady || pendingCommandId == 0) {
     return false;
@@ -619,6 +652,13 @@ void networkApiUpdate() {
   }
 
   if (pendingCommandId != 0) {
+    // A GOTO is in flight. Keep checking the server for a priority STOP so it
+    // can preempt the move instead of waiting out the full ACK timeout.
+    if (pendingCommandType == "GOTO" &&
+        ((now - lastCommandPollMs) >= API_COMMAND_POLL_INTERVAL_MS || lastCommandPollMs == 0)) {
+      lastCommandPollMs = now;
+      checkForPreemptingStop();
+    }
     return;
   }
 
